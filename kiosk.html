@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Order here</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+<header><h1 id="title">Order here</h1><button id="again" class="ghost" hidden onclick="welcome()">New order</button></header>
+<main id="app"></main>
+<script src="app.js"></script>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script>
+const R = new URLSearchParams(location.search).get('r'), app = $('#app'), L = {
+  pending:'Order received', preparing:'Your food is being prepared', ready:'Ready. Please pick up your order!', collected:'Collected. Enjoy your meal!'};
+let menu = [], cart = {}, type = '', cat = 'Food', mine = null, timer, lastCall = '';
+
+(async () => {
+  if (!R) { const rs = await api('restaurants'); app.innerHTML = '<h2 class="center">Choose a restaurant</h2><div class="grid">' + rs.map(r => `<a class="card pick" href="kiosk.html?r=${r.id}"><b>${esc(r.name)}</b><small>${esc(r.location)}</small></a>`).join('') + '</div>'; return; }
+  try { const m = await api('menu', null, '&r=' + R); menu = m.items; $('#title').textContent = m.name; welcome(); }
+  catch (e) { app.innerHTML = '<p class="center">' + esc(e.message) + '</p>'; }
+})();
+
+function welcome() {
+  clearInterval(timer); cart = {}; type = ''; mine = null; $('#again').hidden = true;
+  app.innerHTML = `<div class="center hero"><h2>Welcome! How will you eat?</h2><div class="row"><button class="big" onclick="start('dine_in')">Dine in</button><button class="big" onclick="start('take_away')">Take away</button></div>
+  <h3 style="margin-top:60px">Already ordered?</h3><div class="row"><input id="tk" type="number" min="1" placeholder="Your token number" aria-label="Token number"><button onclick="find()">Track my order</button></div></div>`;
+}
+function start(t) { type = t; menuView(); }
+
+function menuView() {
+  const total = menu.reduce((s, m) => s + (cart[m.id] || 0) * m.price, 0), n = Object.values(cart).reduce((a, b) => a + b, 0);
+  app.innerHTML = `<div class="tabs">${['Food','Drinks','Desserts'].map(c => `<button class="${c === cat ? 'on' : ''}" onclick="cat='${c}';menuView()">${c}</button>`).join('')}<span class="tag">${type === 'dine_in' ? 'Dine in' : 'Take away'}</span></div>
+  <div class="layout"><div class="grid">${menu.filter(m => m.category === cat).map(m => `<div class="card dish">${m.image ? `<img src="uploads/${esc(m.image)}" alt="${esc(m.name)}">` : '<div class="noimg">🍴</div>'}<b>${esc(m.name)}</b><span>${UGX(m.price)}</span>
+  <div class="qty"><button aria-label="Remove one" onclick="chg(${m.id},-1)">−</button><em>${cart[m.id] || 0}</em><button aria-label="Add one" onclick="chg(${m.id},1)">+</button></div></div>`).join('') || '<p>Nothing in this section yet.</p>'}</div>
+  <aside class="card cart"><h3>Your order</h3>${menu.filter(m => cart[m.id]).map(m => `<p><span>${cart[m.id]} × ${esc(m.name)}</span><b>${UGX(cart[m.id] * m.price)}</b></p>`).join('') || '<p>Add something from the menu.</p>'}<h3>Total ${UGX(total)}</h3><button class="big" ${n ? '' : 'disabled'} onclick="place()">Place order</button><p><button class="ghost" style="color:#16130f;border-color:#16130f;width:100%" onclick="welcome()">Cancel</button></p></aside></div>`;
+}
+function chg(id, d) { cart[id] = Math.max(0, (cart[id] || 0) + d); menuView(); }
+
+async function place() {
+  try { mine = await api('order', {r: R, type, items: Object.entries(cart).filter(e => e[1]).map(([id, qty]) => ({id: +id, qty}))}); lastCall = ''; ticket('pending'); watch(); }
+  catch (e) { alert(e.message); }
+}
+async function find() {
+  try { mine = await api('track', null, '&r=' + R + '&t=' + (+$('#tk').value)); lastCall = ''; ticket(mine.status); watch(); }
+  catch (e) { alert(e.message); }
+}
+function ticket(s) {
+  $('#again').hidden = false;
+  app.innerHTML = `<div class="ticket center ${s}"><p>Your token</p><div class="token">${mine.token}</div><h2>${L[s]}</h2><p>Total ${UGX(mine.total)}</p><p><small>Remember your token. This screen and the order board update by themselves.</small></p></div>`;
+}
+function watch() {
+  clearInterval(timer);
+  timer = setInterval(async () => {
+    try {
+      const o = await api('track', null, '&id=' + mine.id); ticket(o.status);
+      if (o.status === 'ready' && o.called_at !== lastCall) { lastCall = o.called_at; callToken(o.token); }
+      if (o.status === 'collected') { clearInterval(timer); setTimeout(() => mine && mine.id === o.id && welcome(), 8000); }
+    } catch (e) {}
+  }, 3000);
+}
+</script>
+</body>
+</html>

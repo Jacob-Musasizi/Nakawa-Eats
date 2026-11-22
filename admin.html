@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Staff and owners</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+<main id="app"></main>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script src="app.js"></script>
+<script>
+let U = null, app = $('#app'); const TYPE = {dine_in: 'Dine in', take_away: 'Take away', delivery: 'Delivery'};
+api('me').then(u => { U = u; dash(); }).catch(() => auth());
+
+function auth(signup) {
+  app.innerHTML = `<form class="card form" id="f"><h2>${signup ? 'Register your restaurant' : 'Staff and owner login'}</h2>
+  ${signup ? '<input name="restaurant" placeholder="Restaurant name" required><input name="location" placeholder="Location in Nakawa" required><input name="name" placeholder="Your name" required>' : ''}
+  <input name="email" type="email" placeholder="Email" required><input name="password" type="password" minlength="6" placeholder="Password (6+ characters)" required>
+  <button class="big">${signup ? 'Sign up' : 'Log in'}</button>${signup ? '' : '<a href="#" id="fg">Forgot password?</a>'}<a href="#" id="sw">${signup ? 'Already registered? Log in' : 'New restaurant? Sign up'}</a><a href="index.html">Back to customer page</a></form>`;
+  $('#sw').onclick = e => { e.preventDefault(); auth(!signup); };
+  if (!signup) $('#fg').onclick = e => { e.preventDefault(); forgotForm('staff', app, () => auth()); };
+  $('#f').onsubmit = async e => { e.preventDefault(); try { U = await api(signup ? 'signup' : 'login', Object.fromEntries(new FormData(e.target))); dash(); } catch (x) { alert(x.message); } };
+}
+
+function dash() {
+  const own = U.role === 'owner';
+  app.innerHTML = `<div class="bar" style="margin:-18px -18px 0"><b>${esc(U.restaurant)} (${esc(U.role)})</b><span><a href="kiosk.html?r=${U.rid}" target="_blank">Kiosk screen</a> · <a href="board.html?r=${U.rid}" target="_blank">Order board</a></span><button class="ghost" onclick="out()">Log out</button></div>
+  <h2>Live orders</h2><div id="orders" class="grid"></div>
+  ${own ? `<h2>Delivery fee</h2><form id="ff" class="card form inline"><input name="fee" type="number" min="0" value="${U.fee}" required aria-label="Delivery fee in UGX"><button>Save fee</button></form><h2>Menu</h2><form id="mf" class="card form inline"><input name="name" placeholder="Dish name" required><select name="category"><option>Food</option><option>Drinks</option><option>Desserts</option></select><input name="price" type="number" min="0" placeholder="Price (UGX)" required><input name="image" type="file" accept="image/*" aria-label="Dish picture"><button>Add dish</button></form><br><div id="items" class="grid"></div>
+  <h2>Add a waiter</h2><form id="wf" class="card form inline"><input name="name" placeholder="Waiter name" required><input name="email" type="email" placeholder="Email" required><input name="password" type="password" minlength="6" placeholder="Password" required><button>Add waiter</button></form>` : ''}`;
+  loadOrders(); clearInterval(window.tm); window.tm = setInterval(loadOrders, 4000);
+  if (own) {
+    loadItems();
+    $('#ff').onsubmit = async e => { e.preventDefault(); try { await api('setfee', Object.fromEntries(new FormData(e.target))); alert('Delivery fee saved'); } catch (x) { alert(x.message); } };
+    $('#mf').onsubmit = async e => { e.preventDefault(); try { await api('additem', new FormData(e.target)); e.target.reset(); loadItems(); } catch (x) { alert(x.message); } };
+    $('#wf').onsubmit = async e => { e.preventDefault(); try { await api('addwaiter', Object.fromEntries(new FormData(e.target))); e.target.reset(); alert('Waiter added'); } catch (x) { alert(x.message); } };
+  }
+}
+async function out() { await api('logout'); U = null; clearInterval(window.tm); auth(); }
+
+async function loadOrders() {
+  if (!U) return;
+  try {
+    const os = await api('orders');
+    $('#orders').innerHTML = os.map(o => `<div class="card order ${o.status}"><div class="token sm">${o.token}</div><b>${TYPE[o.order_type]}</b> (${o.status.replace(/_/g, ' ')})${o.order_type === 'delivery' ? `<br>${esc(o.delivery_address)}<br>${esc(o.phone)} · paid by ${esc(o.payment_method.replace('_', ' '))}` : ''}<ul>${o.items.map(i => `<li>${i.qty} × ${esc(i.name)}</li>`).join('')}</ul><b>${UGX(o.total)}</b><div class="row">${btns(o)}</div></div>`).join('') || '<p>No active orders.</p>';
+  } catch (e) {}
+}
+const b = (o, s, t) => `<button onclick="st(${o.id},'${s}')">${t}</button>`;
+const btns = o => o.order_type === 'delivery' ? ({
+  pending: b(o, 'preparing', 'Start preparing'), preparing: b(o, 'ready', 'Packed for rider'),
+  ready: b(o, 'out_for_delivery', 'Out for delivery'), out_for_delivery: b(o, 'delivered', 'Delivered')})[o.status] : ({
+  pending: b(o, 'preparing', 'Start preparing'), preparing: b(o, 'ready', 'Ready: call customer'),
+  ready: b(o, 'ready', 'Call again') + b(o, 'collected', 'Collected')})[o.status];
+async function st(id, status) { await api('status', {id, status}); loadOrders(); }
+
+async function loadItems() {
+  const it = await api('myitems');
+  $('#items').innerHTML = it.map(m => `<div class="card dish">${m.image ? `<img src="uploads/${esc(m.image)}" alt="">` : '<div class="noimg">🍴</div>'}<b>${esc(m.name)}</b><span>${esc(m.category)} · ${UGX(m.price)}</span><button onclick="del(${m.id})">Delete</button></div>`).join('') || '<p>No dishes yet. Add your first dish above.</p>';
+}
+async function del(id) { if (confirm('Delete this dish?')) { await api('delitem', {id}); loadItems(); } }
+</script>
+</body>
+</html>

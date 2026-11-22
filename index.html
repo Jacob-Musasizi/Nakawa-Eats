@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Nakawa Restaurant Orders</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body class="home">
+<header><h1>Nakawa Restaurant Orders</h1><a href="shop.html" style="color:#ffc400">Order for delivery</a><a class="bar" href="admin.html" style="padding:0;background:none;color:#ffc400">Staff and owner login</a></header>
+<main><h2>Pick a restaurant</h2><div id="list" class="grid"></div></main>
+<script src="app.js"></script>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script>
+api('restaurants').then(rs => $('#list').innerHTML = rs.map(r => `<div class="card"><b>${esc(r.name)}</b><small style="display:block;opacity:.65">${esc(r.location)}</small><div class="row" style="justify-content:flex-start"><a href="kiosk.html?r=${r.id}"><button>Order here</button></a><a href="board.html?r=${r.id}"><button>Order board</button></a></div></div>`).join('') || '<p>No restaurants yet. Owners can sign up from the staff login.</p>');
+</script>
+</body>
+</html>

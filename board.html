@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Order board</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body class="board">
+<header><h1 id="t">Order board</h1></header>
+<div id="gate" class="gate"><button class="big" onclick="this.parentNode.remove();poll();setInterval(poll,3000)">Start display (turns sound on)</button></div>
+<div class="cols"><section><h2>Preparing</h2><div id="p" class="tokens"></div></section><section class="rd"><h2>Ready. Please collect</h2><div id="r" class="tokens"></div></section></div>
+<script src="app.js"></script>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script>
+const R = new URLSearchParams(location.search).get('r'), seen = {};
+async function poll() {
+  try {
+    const o = await api('board', null, '&r=' + R), ready = o.orders.filter(x => x.status === 'ready');
+    $('#t').textContent = o.name + ' orders';
+    $('#p').innerHTML = o.orders.filter(x => x.status !== 'ready').map(x => `<span>${x.token}</span>`).join('');
+    $('#r').innerHTML = ready.map(x => `<span>${x.token}</span>`).join('');
+    ready.filter(x => seen[x.token] !== x.called_at).forEach(x => { seen[x.token] = x.called_at; callToken(x.token); });
+  } catch (e) {}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Set a new password</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+<header>
+  <h1>Nakawa Restaurant Orders</h1>
+</header>
+<main id="app"></main>
+<footer>
+  <p>&copy; 2026 Nakawa Restaurant Orders · Nakawa, Kampala, Uganda</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script src="app.js"></script>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script>
+const P = new URLSearchParams(location.search), t = P.get('t'), k = P.get('k') === 'customer' ? 'customer' : 'staff', login = k === 'customer' ? 'shop.html' : 'admin.html', app = $('#app');
+if (!t) app.innerHTML = '<p class="center">This reset link is not valid. Please request a new one from the login page.</p>';
+else {
+  app.innerHTML = `<form class="card form" id="f"><h2>Set a new password</h2><input name="password" type="password" minlength="6" placeholder="New password (6+ characters)" required><input name="again" type="password" minlength="6" placeholder="Repeat the new password" required><button class="big">Save password</button></form>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+    if (f.password !== f.again) return alert('The two passwords do not match');
+    try {
+      await api('reset', {token: t, type: k, password: f.password});
+      app.innerHTML = `<div class="card form"><h2>Password changed</h2><p>You can now log in with your new password.</p><a href="${login}"><button class="big">Go to login</button></a></div>`;
+    } catch (x) { alert(x.message); }
+  };
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Nakawa Eats: order for delivery</title>
+    <link rel="stylesheet" href="style.css">
+<style>.steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.steps span{padding:4px 10px;border:2px solid var(--ink);border-radius:4px;opacity:.4}.steps .on{background:var(--sun);opacity:1;font-weight:700}.opt{display:flex;gap:8px;align-items:center}.opt input{width:auto}.ln{display:flex;justify-content:space-between;gap:8px}@media print{header,footer,.noprint{display:none}}</style>
+</head>
+<body>
+<header><h1><a href="shop.html" style="color:#fff;text-decoration:none">Nakawa Eats</a></h1><span id="who"></span></header>
+<main id="app"></main>
+<footer>
+  <p>&copy; 2026 Nakawa Eats | Bookshustlers</p>
+  <p><a href="index.html">Home</a> · <a href="shop.html">Order for delivery</a> · <a href="admin.html">Staff login</a></p>
+</footer>
+<script src="app.js"></script>
+<script>
+let C = null, R = null, menu = [], fee = 0, rname = '', cart = {}, cat = 'Food', timer;
+const app = $('#app'), PM = {mtn_momo: 'MTN MoMo', airtel_money: 'Airtel Money', card: 'Card'},
+  ST = {pending: 'Order received', preparing: 'Preparing', ready: 'Packed', out_for_delivery: 'On the way', delivered: 'Delivered'},
+  lk = (t, f) => `<a href="#" style="color:#ffc400" onclick="${f};return false">${t}</a>`;
+api('cme').then(c => C = c).catch(() => {}).finally(() => { bar(); home(); });
+function bar() { $('#who').innerHTML = C ? `${esc(C.name)} · ${lk('My orders', 'orders()')} · ${lk('Log out', 'logout()')}` : lk('Log in or sign up', 'auth()'); }
+
+async function home() {
+  clearInterval(timer);
+  try { const rs = await api('restaurants');
+    app.innerHTML = '<h2>Choose a restaurant</h2><div class="grid">' + rs.map(r => `<a href="#" class="card pick" onclick="pick(${r.id});return false"><b>${esc(r.name)}</b><small>${esc(r.location)} · delivery ${UGX(r.delivery_fee)}</small></a>`).join('') + '</div>';
+  } catch (e) { app.innerHTML = '<p>' + esc(e.message) + '</p>'; }
+}
+async function pick(id) { clearInterval(timer); R = id; cart = {}; const m = await api('menu', null, '&r=' + id); menu = m.items; fee = m.fee; rname = m.name; menuView(); }
+const sub = () => menu.reduce((s, m) => s + (cart[m.id] || 0) * m.price, 0);
+
+function menuView() {
+  const n = Object.values(cart).reduce((a, b) => a + b, 0);
+  app.innerHTML = `<h2>${esc(rname)}</h2><div class="tabs">${['Food','Drinks','Desserts'].map(c => `<button class="${c === cat ? 'on' : ''}" onclick="cat='${c}';menuView()">${c}</button>`).join('')}<a class="tag" href="#" onclick="home();return false">Change restaurant</a></div>
+  <div class="layout"><div class="grid">${menu.filter(m => m.category === cat).map(m => `<div class="card dish">${m.image ? `<img src="uploads/${esc(m.image)}" alt="${esc(m.name)}">` : '<div class="noimg">🍴</div>'}<b>${esc(m.name)}</b><span>${UGX(m.price)}</span>
+  <div class="qty"><button aria-label="Remove one" onclick="chg(${m.id},-1)">−</button><em>${cart[m.id] || 0}</em><button aria-label="Add one" onclick="chg(${m.id},1)">+</button></div></div>`).join('') || '<p>Nothing in this section yet.</p>'}</div>
+  <aside class="card cart"><h3>Your order</h3>${menu.filter(m => cart[m.id]).map(m => `<p><span>${cart[m.id]} × ${esc(m.name)}</span><b>${UGX(cart[m.id] * m.price)}</b></p>`).join('') || '<p>Add something from the menu.</p>'}<p><span>Delivery</span><b>${UGX(fee)}</b></p><h3>Total ${UGX(sub() + fee)}</h3><button class="big" ${n ? '' : 'disabled'} onclick="checkout()">Checkout</button></aside></div>`;
+}
+function chg(id, d) { cart[id] = Math.max(0, (cart[id] || 0) + d); menuView(); }
+
+function auth(next, signup) {
+  clearInterval(timer);
+  app.innerHTML = `<form class="card form" id="f"><h2>${signup ? 'Create your account' : 'Log in'}</h2>${signup ? '<input name="name" placeholder="Full name" required><input name="phone" placeholder="Phone (07...)" required><input name="address" placeholder="Delivery address in Nakawa" required>' : ''}
+  <input name="email" type="email" placeholder="Email" required><input name="password" type="password" minlength="6" placeholder="Password (6+ characters)" required>
+  <button class="big">${signup ? 'Sign up' : 'Log in'}</button>${signup ? '' : '<a href="#" id="fg">Forgot password?</a>'}<a href="#" id="sw">${signup ? 'Have an account? Log in' : 'New here? Create an account'}</a></form>`;
+  $('#sw').onclick = e => { e.preventDefault(); auth(next, !signup); };
+  if (!signup) $('#fg').onclick = e => { e.preventDefault(); forgotForm('customer', app, () => auth(next)); };
+  $('#f').onsubmit = async e => { e.preventDefault(); try { C = await api(signup ? 'cregister' : 'clogin', Object.fromEntries(new FormData(e.target))); bar(); next ? next() : home(); } catch (x) { alert(x.message); } };
+}
+async function logout() { await api('clogout'); C = null; bar(); home(); }
+
+function checkout() {
+  if (!C) return auth(checkout);
+  app.innerHTML = `<form class="card form" id="co"><h2>Checkout: ${esc(rname)}</h2>
+  <input name="address" value="${esc(C.address)}" placeholder="Delivery address" required><input name="phone" value="${esc(C.phone)}" placeholder="Phone for the rider" required>
+  <b>Pay with</b><label class="opt"><input type="radio" name="method" value="mtn_momo" checked> MTN MoMo</label><label class="opt"><input type="radio" name="method" value="airtel_money"> Airtel Money</label><label class="opt"><input type="radio" name="method" value="card"> Card</label>
+  <div id="momo"><input name="momo" placeholder="Mobile money number (07...)"></div>
+  <div id="cardbox" hidden><input name="card" inputmode="numeric" placeholder="Card number"><input name="exp" placeholder="MM/YY"><input name="cvv" inputmode="numeric" placeholder="CVV"></div>
+  <p>Food ${UGX(sub())} + delivery ${UGX(fee)}</p><button class="big">Pay ${UGX(sub() + fee)}</button><small>Demo mode: payments are simulated and no real money is charged.</small><a href="#" onclick="menuView();return false">Back to menu</a></form>`;
+  const form = $('#co');
+  form.onchange = () => { const m = new FormData(form).get('method'); $('#momo').hidden = m === 'card'; $('#cardbox').hidden = m !== 'card'; };
+  form.onsubmit = async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(form));
+    try { const o = await api('delivery', {r: R, address: f.address, phone: f.phone, method: f.method, pay: {momo: f.momo, card: f.card, exp: f.exp, cvv: f.cvv}, items: Object.entries(cart).filter(x => x[1]).map(([id, qty]) => ({id: +id, qty}))}); receipt(o.id); }
+    catch (x) { alert(x.message); }
+  };
+}
+
+async function receipt(id) {
+  clearInterval(timer);
+  try { const o = await api('receipt', null, '&id=' + id);
+    app.innerHTML = `<div class="ticket"><h2 class="center">E-receipt</h2><p class="center">${esc(o.restaurant)}<br>${esc(o.location)}</p>
+    <p>Order #${o.token} · ${esc(o.created_at)}<br>Customer: ${esc(o.customer)}<br>Deliver to: ${esc(o.delivery_address)} (${esc(o.phone)})</p><hr>
+    ${o.items.map(i => `<p class="ln"><span>${i.qty} × ${esc(i.name)}</span><span>${UGX(i.qty * i.price)}</span></p>`).join('')}
+    <p class="ln"><span>Delivery</span><span>${UGX(o.delivery_fee)}</span></p><hr><h3 class="ln"><span>Total paid</span><span>${UGX(o.total)}</span></h3>
+    <p>Paid by ${PM[o.payment_method]} · Ref ${esc(o.payment_ref)}</p><div class="row noprint"><button onclick="window.print()">Print or save as PDF</button><button onclick="orders()">Track my order</button></div></div>`;
+  } catch (x) { alert(x.message); }
+}
+
+async function orders() {
+  if (!C) return auth(orders);
+  clearInterval(timer);
+  const draw = async () => { const os = await api('myorders');
+    app.innerHTML = '<h2>My orders</h2>' + (os.map(o => `<div class="card" style="margin-bottom:12px"><b>#${o.token} · ${esc(o.restaurant)}</b> · ${UGX(o.total)}<div class="steps">${Object.keys(ST).map(k => `<span class="${k === o.status ? 'on' : ''}">${ST[k]}</span>`).join('')}</div><button onclick="receipt(${o.id})">View receipt</button></div>`).join('') || '<p>No orders yet. Pick a restaurant to start.</p>'); };
+  try { await draw(); timer = setInterval(() => draw().catch(() => {}), 5000); } catch (x) { alert(x.message); }
+}
+</script>
+</body>
+</html>
